@@ -1,0 +1,29 @@
+# 1. Trọng số mô hình AI 
+weights/*.pt
+weights/*.pth
+*.h5
+*.onnx
+
+# 2. Dữ liệu Test (Video, Ảnh)
+test_media/*.mp4
+test_media/*.avi
+*.jpg
+*.png
+
+# 3. Môi trường Ảo & Biến môi trường
+venv/
+env/
+.venv/
+.env
+
+# 4. File rác của Python & Jupyter Notebook
+__pycache__/
+*.py[cod]
+*$py.class
+.ipynb_checkpoints/
+
+# 5. Cấu hình IDE (VS Code, PyCharm) & Hệ điều hành
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
