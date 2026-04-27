@@ -29,3 +29,26 @@ def get_crop(frame, coords, idxs, w, h, pad=0.2):
     x_max, y_max = np.max(pts, axis=0)
     pw, ph = int(pad * (x_max - x_min)), int(pad * (y_max - y_min))
     return frame[max(0, int(y_min)-ph):min(h, int(y_max)+ph), max(0, int(x_min)-pw):min(w, int(x_max)+pw)], (x_min, y_min, x_max, y_max)
+
+class WebcamVideoStream:
+    def __init__(self, src=0):
+        self.stream = cv2.VideoCapture(src)
+        (self.grabbed, self.frame) = self.stream.read()
+        self.stopped = False
+
+    def start(self):
+        Thread(target=self.update, args=(), daemon=True).start()
+        return self
+
+    def update(self):
+        while True:
+            if self.stopped:
+                return
+            (self.grabbed, self.frame) = self.stream.read()
+
+    def read(self):
+        return self.grabbed, self.frame
+
+    def stop(self):
+        self.stopped = True
+        self.stream.release()

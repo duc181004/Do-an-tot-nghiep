@@ -42,7 +42,8 @@ def draw_dashboard_vn(img, fps, ear, perclos, mar, yawn_ratio, emotion, score, w
     return cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
 
 # 3. VÒNG LẶP HỆ THỐNG
-cap = cv2.VideoCapture(0)
+print("⏳ Đang khởi động luồng Camera độc lập...")
+cap = WebcamVideoStream(src=0).start()
 
 prev_time = time.time()
 smoothed_fps = 30.0
@@ -71,11 +72,12 @@ show_debug_mode = False
 print("🎥 Hệ thống đang quét luồng Camera. Nhấn 'q' để thoát. Nhấn 'd' bật Debug.")
 
 with torch.no_grad():
-    while cap.isOpened():
+    while True:
         ret, frame = cap.read()
-        if not ret: break
+        if not ret: 
+            continue
 
-        frame = cv2.resize(frame, (1280, 720))
+        # frame = cv2.resize(frame, (1280, 720))
 
         h, w = frame.shape[:2]
         
@@ -271,17 +273,27 @@ with torch.no_grad():
                 cv2.rectangle(overlay, (0, 0), (w, h), (0, 0, 255), -1)
                 cv2.addWeighted(overlay, 0.3, frame, 0.7, 0, frame)
 
-        panel = frame.copy()
-        cv2.rectangle(panel, (0, 0), (350, h), (0, 0, 0), -1)
-        cv2.addWeighted(panel, 0.6, frame, 0.4, 0, frame)
+        display_frame = cv2.resize(frame, (1280, 720))
+        dh, dw = display_frame.shape[:2] # dh=720, dw=1280
 
-        frame = draw_dashboard_vn(frame, smoothed_fps, avg_ear, perclos, raw_mar, yawn_ratio, current_emotion, attention_score, msg_vn, color_vn)
-        
-        cv2.imshow("HAUI - Advanced Driver Monitoring System", frame)
+        if active_warning_msg.startswith("CRITICAL"):
+            overlay = display_frame.copy()
+            cv2.rectangle(overlay, (0, 0), (dw, dh), (0, 0, 255), -1)
+            cv2.addWeighted(overlay, 0.3, display_frame, 0.7, 0, display_frame)
+
+        panel = display_frame.copy()
+        cv2.rectangle(panel, (0, 0), (350, dh), (0, 0, 0), -1)
+        cv2.addWeighted(panel, 0.6, display_frame, 0.4, 0, display_frame)
+
+        display_frame = draw_dashboard_vn(display_frame, smoothed_fps, avg_ear, perclos, raw_mar, yawn_ratio, current_emotion, attention_score, msg_vn, color_vn)
+
+        cv2.imshow("HAUI - Advanced Driver Monitoring System", display_frame)
         
         key = cv2.waitKey(1) & 0xFF
-        if key == ord('q'): break
-        elif key == ord('d'): show_debug_mode = not show_debug_mode
+        if key == ord('q'): 
+            cap.stop()
+            break
+        elif key == ord('d'): 
+            show_debug_mode = not show_debug_mode
 
-cap.release()
 cv2.destroyAllWindows()
