@@ -1,89 +1,22 @@
 import cv2
 import torch
-import torch.nn as nn
-from torchvision import transforms, models
 import mediapipe as mp
 import numpy as np
-import math
-from PIL import Image, ImageDraw, ImageFont
-from collections import deque
 import time
-import pygame
+from collections import deque
+from PIL import Image, ImageDraw, ImageFont
 
-# 1. CẤU HÌNH THÔNG SỐ HỆ THỐNG
-WEIGHTS_EYE = 'weights/best_eye_state_mobilenetv2.pt'
-WEIGHTS_MOUTH = 'weights/best_yawn_ultimate.pt'
-WEIGHTS_EMOTION = 'weights/best_emotion_model.pt'
+from config import *
+from core_vision import *
+from core_ai import *
 
-EMA_ALPHA = 0.15
-TARGET_FPS = 30
-WINDOW_SIZE = TARGET_FPS * 1
-PERCLOS_WINDOW = TARGET_FPS * 2
-PERCLOS_THRESH = 0.5
-ALARM_RATIO = 0.6
-
-EMOTION_LABELS = ['Angry', 'Happy', 'Neutral', 'Surprise']
-
-CAM_XUC = {
-    'Angry': 'Tức giận',
-    'Happy': 'Vui vẻ',
-    'Neutral': 'Bình thường',
-    'Surprise': 'Bất ngờ'
-}
-
-try:
-    font_text = ImageFont.truetype("arial.ttf", 32)
-    font_warning = ImageFont.truetype("arial.ttf", 48)
-except IOError:
-    print("⚠️ Không tìm thấy arial.ttf, chuyển sang font mặc định.")
-    font_text = ImageFont.load_default()
-    font_warning = ImageFont.load_default()
-
-# Âm thanh
-pygame.mixer.init()
-try:
-    sound_warning = pygame.mixer.Sound("sound_effects/warning.wav")
-    sound_alarm = pygame.mixer.Sound("sound_effects/alarm.wav")
-except:
-    print("⚠️ Không tìm thấy âm thanh. Vận hành ở chế độ Im lặng.")
-    sound_warning = sound_alarm = None
-
-device = torch.device("mps" if torch.backends.mps.is_available() else ("cuda" if torch.cuda.is_available() else "cpu"))
 print(f"🚀 Hệ thống DMS khởi động thành công trên phần cứng: {device.type.upper()}")
 
-# 2. KHỞI TẠO MEDIAPIPE & AI MODELS
+# 1. KHỞI TẠO MEDIAPIPE
 mp_face_mesh = mp.solutions.face_mesh
-# Tắt refine_landmarks (Không theo dõi Iris) 
 face_mesh = mp_face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=False)
 
-MOUTH_IDXS = [61, 291, 0, 17, 39, 40, 37, 267, 269, 270, 409, 287, 375, 321, 405, 314, 84, 181, 91, 146]
-LEFT_EYE_IDXS = [33, 160, 158, 133, 153, 144]
-RIGHT_EYE_IDXS = [362, 385, 387, 263, 373, 380]
-
-def load_mobilenet_v2(path):
-    model = models.mobilenet_v2(weights=None)
-    model.classifier[1] = nn.Linear(model.classifier[1].in_features, 2)
-    model.load_state_dict(torch.load(path, map_location=device))
-    return model.to(device).eval()
-
-def load_resnet50(path, classes):
-    model = models.resnet50(weights=None)
-    num_ftrs = model.fc.in_features
-    model.fc = nn.Sequential(nn.Dropout(p=0.5), nn.Linear(num_ftrs, classes))
-    model.load_state_dict(torch.load(path, map_location=device))
-    return model.to(device).eval()
-
-eye_model = load_mobilenet_v2(WEIGHTS_EYE)
-mouth_model = load_mobilenet_v2(WEIGHTS_MOUTH)
-emotion_model = load_resnet50(WEIGHTS_EMOTION, len(EMOTION_LABELS))
-
-transform = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor(),
-    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-])
-
-# 3. CÁC HÀM XỬ LÝ TOÁN HỌC & ĐỒ HỌA
+# 2. HÀM ĐỒ HỌA
 def draw_dashboard_vn(img, fps, ear, perclos, mar, yawn_ratio, emotion, score, warning_msg, warning_color):
     img_pil = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
     draw = ImageDraw.Draw(img_pil)
@@ -101,42 +34,14 @@ def draw_dashboard_vn(img, fps, ear, perclos, mar, yawn_ratio, emotion, score, w
     score_color = (0, 255, 0) if score > 0.65 else ((255, 255, 0) if score > 0.4 else (255, 0, 0))
     draw.text((10, 140), f"Chỉ số tập trung: {score*100:.1f}%", font=font_md, fill=score_color)
 
-    cam_xuc_hien_tai = CAM_XUC.get(current_emotion)
-
+    cam_xuc_hien_tai = CAM_XUC.get(emotion, "Bình thường")
     draw.text((20, 250), f"Cảm xúc: {cam_xuc_hien_tai}", font=font_text, fill=(255, 255, 255))
 
     if warning_msg:
         draw.text((380, img.shape[0] - 80), warning_msg, font=font_lg, fill=(warning_color[2], warning_color[1], warning_color[0]))
     return cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
 
-def calculate_mar(landmarks, w, h):
-    p_left, p_right = landmarks.landmark[61], landmarks.landmark[291]
-    p_top, p_bottom = landmarks.landmark[13], landmarks.landmark[14]
-    dist_h = math.hypot((p_right.x - p_left.x)*w, (p_right.y - p_left.y)*h)
-    dist_v = math.hypot((p_bottom.x - p_top.x)*w, (p_bottom.y - p_top.y)*h)
-    return dist_v / dist_h if dist_h > 0 else 0.0
-
-def calculate_ear(landmarks, idxs, w, h):
-    p = [(landmarks.landmark[i].x * w, landmarks.landmark[i].y * h) for i in idxs]
-    v1 = math.hypot(p[1][0] - p[5][0], p[1][1] - p[5][1])
-    v2 = math.hypot(p[2][0] - p[4][0], p[2][1] - p[4][1])
-    h_dist = math.hypot(p[0][0] - p[3][0], p[0][1] - p[3][1])
-    return (v1 + v2) / (2.0 * h_dist) if h_dist > 0 else 0.0
-
-def calculate_head_ratio(landmarks, w, h):
-    n, c, f = landmarks.landmark[1], landmarks.landmark[152], landmarks.landmark[10]
-    dist_nc = math.hypot((n.x - c.x)*w, (n.y - c.y)*h)
-    dist_nf = math.hypot((n.x - f.x)*w, (n.y - f.y)*h)
-    return dist_nc / dist_nf if dist_nf > 0 else 0.0
-
-def get_crop(frame, coords, idxs, w, h, pad=0.2):
-    pts = coords[idxs]
-    x_min, y_min = np.min(pts, axis=0)
-    x_max, y_max = np.max(pts, axis=0)
-    pw, ph = int(pad * (x_max - x_min)), int(pad * (y_max - y_min))
-    return frame[max(0, int(y_min)-ph):min(h, int(y_max)+ph), max(0, int(x_min)-pw):min(w, int(x_max)+pw)], (x_min, y_min, x_max, y_max)
-
-# 4. VÒNG LẶP HỆ THỐNG DMS
+# 3. VÒNG LẶP HỆ THỐNG
 cap = cv2.VideoCapture(0)
 
 prev_time = time.time()
@@ -183,6 +88,30 @@ with torch.no_grad():
         h, w, _ = frame.shape
         results = face_mesh.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
         frame_count += 1
+
+        if frame_count < 45:
+            if results.multi_face_landmarks:
+                landmarks = results.multi_face_landmarks[0]
+                
+                l_ear = calculate_ear(landmarks, LEFT_EYE_IDXS, w, h)
+                r_ear = calculate_ear(landmarks, RIGHT_EYE_IDXS, w, h)
+                current_ear = (l_ear + r_ear) / 2.0
+                current_head = calculate_head_ratio(landmarks, w, h)
+                
+                if frame_count == 1: 
+                    baseline_ear = current_ear
+                    baseline_head_ratio = current_head
+                else: 
+                    baseline_ear = 0.9 * baseline_ear + 0.1 * current_ear
+                    baseline_head_ratio = 0.9 * baseline_head_ratio + 0.1 * current_head
+
+            phan_tram = int((frame_count / 45) * 100)
+            cv2.putText(frame, f"DANG HIEU CHINH CA NHAN HOA... {phan_tram}%", 
+                        (int(w/2) - 300, int(h/2)), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 255), 3)
+            
+            cv2.imshow("HAUI - Advanced Driver Monitoring System", frame)
+            if cv2.waitKey(1) & 0xFF == ord('q'): break
+            continue
         
         is_eyes_closed = is_yawning = False
         is_head_down_final = False
@@ -190,7 +119,6 @@ with torch.no_grad():
 
         if results.multi_face_landmarks:
             landmarks = results.multi_face_landmarks[0]
-            
             coords = np.array([[lm.x * w, lm.y * h] for lm in landmarks.landmark])
             face_w = np.max(coords[:, 0]) - np.min(coords[:, 0])
             
@@ -242,7 +170,7 @@ with torch.no_grad():
                         if avg_ear < EAR_THRESH or ((ema_left_prob + ema_right_prob) / 2.0) > 0.4:
                             is_eyes_closed = True
 
-                # --- XỬ LÝ CẢM XÚC & FULL FACE CROP ---
+                # --- XỬ LÝ CẢM XÚC ---
                 x_min, y_min = np.max([0, int(np.min(coords[:, 0]))]), np.max([0, int(np.min(coords[:, 1]))])
                 x_max, y_max = np.min([w, int(np.max(coords[:, 0]))]), np.min([h, int(np.max(coords[:, 1]))])
                 pw, ph = int(0.1 * (x_max - x_min)), int(0.1 * (y_max - y_min))
@@ -262,25 +190,23 @@ with torch.no_grad():
                 if ema_head_ratio > baseline_head_ratio * 0.9: 
                     baseline_head_ratio = 0.99 * baseline_head_ratio + 0.01 * ema_head_ratio
                 
-                # Bộ lọc độ trễ cho Head Down
                 raw_head_down = (ema_head_ratio < 0.80 * baseline_head_ratio and avg_ear < EAR_THRESH * 1.1)
                 head_down_counter = head_down_counter + 1 if raw_head_down else 0
                 is_head_down_final = (head_down_counter >= 5)
 
-                # --- CẬP NHẬT CỬA SỔ & TÍNH ATTENTION SCORE ---
+                # --- CẬP NHẬT CỬA SỔ & TÍNH SCORE ---
                 eye_window.append(1 if is_eyes_closed else 0)
                 yawn_window.append(1 if is_yawning else 0)
                 perclos = sum(eye_window) / PERCLOS_WINDOW if len(eye_window) > 0 else 0
                 yawn_ratio = sum(yawn_window) / WINDOW_SIZE if len(yawn_window) > 0 else 0
                 
-                # Attention Score 
                 penalty = 0.6 * perclos + 0.25 * yawn_ratio + 0.15 * (1 if is_head_down_final else 0)
                 attention_score = np.clip(1.0 - penalty, 0.0, 1.0)
                 
                 if is_eyes_closed: consecutive_closed_frames += 1
                 else: consecutive_closed_frames = 0
 
-                # --- MÁY TRẠNG THÁI CẢNH BÁO ---
+                # --- LOGIC CẢNH BÁO ---
                 raw_warning = ""
                 raw_color = (0, 255, 0)
                 
@@ -316,7 +242,7 @@ with torch.no_grad():
             consecutive_closed_frames = 0
             head_down_counter = 0
 
-        # 5. RENDER ĐỒ HỌA & ÂM THANH
+        # --- HIỂN THỊ GIAO DIỆN ---
         msg_vn = ""
         color_vn = (0, 255, 0)
         
@@ -332,13 +258,12 @@ with torch.no_grad():
             elif "DROWSINESS" in active_warning_msg or "YAWNING" in active_warning_msg: msg_vn = "TÀI XẾ MẤT TẬP TRUNG!"
             elif "ROAD RAGE" in active_warning_msg: msg_vn = "TÀI XẾ CĂNG THẲNG!"
             
-            #  Quản lý Cooldown âm thanh
             if curr_time - last_sound_time > 2.0:
-                if active_warning_msg.startswith("CRITICAL"):
-                    if sound_alarm: sound_alarm.play()
+                if active_warning_msg.startswith("CRITICAL") and sound_alarm:
+                    sound_alarm.play()
                     last_sound_time = curr_time
-                elif active_warning_msg.startswith("WARNING"):
-                    if sound_warning: sound_warning.play()
+                elif active_warning_msg.startswith("WARNING") and sound_warning:
+                    sound_warning.play()
                     last_sound_time = curr_time
 
             if active_warning_msg.startswith("CRITICAL"):
