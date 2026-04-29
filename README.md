@@ -7,13 +7,13 @@ Hệ thống giám sát trạng thái tài xế thời gian thực sử dụng t
 * **Phát hiện ngáp (Yawning):** Dung hợp chéo giữa chỉ số MAR (Mouth Aspect Ratio) và mô hình học sâu **MobileNetV2**để cảnh báo hành vi ngáp mệt mỏi.
 * **Cảnh báo mất tập trung (Distraction):** Theo dõi hướng đầu (Head Ratio) và tính toán **Attention Score** để phát hiện việc tài xế cúi đầu hoặc nhìn xuống điện thoại.
 * **Nhận diện cảm xúc (Road Rage):** Sử dụng mạng **ResNet50** để nhận diện trạng thái tức giận, giúp ngăn chặn các hành vi lái xe bạo lực.
-* **Tối ưu hóa thời gian thực:**
+## 🌟Tối ưu hóa thời gian thực:
 
-** **Multi-threading:** Tách luồng Camera độc lập để triệt tiêu độ trễ I/O.
+* **Multi-threading:** Tách luồng Camera độc lập để triệt tiêu độ trễ I/O.
 
-** **Resolution Decoupling:** Xử lý AI trên khung hình thấp nhưng hiển thị giao diện HUD chuẩn HD.
+* **Resolution Decoupling:** Xử lý AI trên khung hình thấp nhưng hiển thị giao diện HUD chuẩn HD.
 
-** **Frame Skipping:** Tối ưu hóa chu kỳ nội suy AI để duy trì FPS ổn định.
+* **Frame Skipping:** Tối ưu hóa chu kỳ nội suy AI để duy trì FPS ổn định.
 
 ## 🛠️ Kiến trúc hệ thống:
 Dự án được thiết kế theo cấu trúc mô-đun (Modular Design) giúp dễ dàng bảo trì và nâng cấp:
