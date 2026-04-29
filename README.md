@@ -61,7 +61,7 @@ Do giới hạn dung lượng Git, vui lòng tải các file trọng số tại 
 python main_system.py
 ```
 
-## 📊 Kết quả huấn luyện và hương pháp tiếp cận:
+## 📊 Kết quả huấn luyện và phương pháp tiếp cận:
 Nhận diện trạng thái mắt(MobileNetV2): Accuracy = 98.16%
 Nhận diện khẩu hình miệng(MobileNetV2): Accuracy = 97.05%
 Nhận diện cảm xúc khuôn mặt(ResNet50): Accuracy = 84.76%
