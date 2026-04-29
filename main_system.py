@@ -137,8 +137,9 @@ with torch.no_grad():
                         img_t = transform(Image.fromarray(cv2.cvtColor(mouth_crop, cv2.COLOR_BGR2RGB))).unsqueeze(0).to(device)
                         last_yawn_prob = torch.softmax(mouth_model(img_t), dim=1)[0][1].item()
                     
-                    ema_mar = raw_mar if ema_mar is None else 0.15 * raw_mar + 0.85 * ema_mar
-                    is_yawning = ((0.6 * ema_mar + 0.4 * last_yawn_prob) > 0.35)
+                    ema_mar = raw_mar if ema_mar is None else 0.4 * raw_mar + 0.6 * ema_mar
+                    
+                    is_yawning = (ema_mar > 0.38) or (last_yawn_prob > 0.70) or (ema_mar > 0.25 and last_yawn_prob > 0.50)
                     
                     if show_debug_mode:
                         cv2.rectangle(frame, (int(m_bbox[0]), int(m_bbox[1])), (int(m_bbox[2]), int(m_bbox[3])), (255, 255, 0), 1)
