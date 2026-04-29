@@ -47,6 +47,7 @@ best_yawn_ultimate.pt
 best_emotion_model.pt
 
 Chạy hệ thống:
+    Bash
     python main_system.py
 
 Phương pháp tiếp cận:
