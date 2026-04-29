@@ -4,7 +4,7 @@ weights/*.pth
 *.h5
 *.onnx
 
-# 2. Dữ liệu Test (Video, Ảnh)
+# 2. Dữ liệu Test 
 test_media/*.mp4
 test_media/*.avi
 *.jpg
@@ -22,7 +22,7 @@ __pycache__/
 *$py.class
 .ipynb_checkpoints/
 
-# 5. Cấu hình IDE (VS Code, PyCharm) & Hệ điều hành
+# 5. Cấu hình IDE & Hệ điều hành
 .vscode/
 .idea/
 .DS_Store
