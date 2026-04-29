@@ -62,9 +62,9 @@ python main_system.py
 ```
 
 ## 📊 Kết quả huấn luyện và phương pháp tiếp cận:
-Nhận diện trạng thái mắt(MobileNetV2): Accuracy = 98.16%
-Nhận diện khẩu hình miệng(MobileNetV2): Accuracy = 97.05%
-Nhận diện cảm xúc khuôn mặt(ResNet50): Accuracy = 84.76%
+* Nhận diện trạng thái mắt(MobileNetV2): Accuracy = 98.16%
+* Nhận diện khẩu hình miệng(MobileNetV2): Accuracy = 97.05%
+* Nhận diện cảm xúc khuôn mặt(ResNet50): Accuracy = 84.76%
 
 Hệ thống áp dụng cơ chế Dynamic Calibration (Hiệu chỉnh cá nhân hóa) trong 1.5 giây đầu tiên khi khởi động để tự động học ngưỡng EAR và tư thế ngồi của từng tài xế, đảm bảo độ chính xác tối đa cho mọi đối tượng sử dụng.
 
